@@ -67,31 +67,71 @@ XのようなSNSアプリケーションのバックエンドAPIを、AWS Lambda
   - 予約済み同時実行数: 最低5（コールドスタート対策）
   - Provisioned Concurrency: 本番環境で検討（コスト vs パフォーマンス）
 
-**Lambda 関数の構成:**
+**Lambda 関数の構成（lambroll 用）:**
 ```
 lambda/
 ├── auth/               # 認証関連の Lambda 関数
-│   ├── register.rb
-│   ├── login.rb
-│   ├── logout.rb
-│   └── me.rb
+│   ├── register/
+│   │   ├── function.json
+│   │   └── index.rb
+│   ├── login/
+│   │   ├── function.json
+│   │   └── index.rb
+│   ├── logout/
+│   │   ├── function.json
+│   │   └── index.rb
+│   └── me/
+│       ├── function.json
+│       └── index.rb
 ├── posts/              # 投稿関連
-│   ├── index.rb
-│   ├── show.rb
-│   ├── create.rb
-│   ├── update.rb
-│   └── destroy.rb
+│   ├── index/
+│   │   ├── function.json
+│   │   └── index.rb
+│   ├── show/
+│   │   ├── function.json
+│   │   └── index.rb
+│   ├── create/
+│   │   ├── function.json
+│   │   └── index.rb
+│   ├── update/
+│   │   ├── function.json
+│   │   └── index.rb
+│   └── destroy/
+│       ├── function.json
+│       └── index.rb
 ├── likes/              # いいね関連
-│   ├── index.rb
-│   ├── create.rb
-│   └── destroy.rb
+│   ├── index/
+│   │   ├── function.json
+│   │   └── index.rb
+│   ├── create/
+│   │   ├── function.json
+│   │   └── index.rb
+│   └── destroy/
+│       ├── function.json
+│       └── index.rb
 ├── comments/           # コメント関連
-│   ├── index.rb
-│   ├── create.rb
-│   └── destroy.rb
+│   ├── index/
+│   │   ├── function.json
+│   │   └── index.rb
+│   ├── create/
+│   │   ├── function.json
+│   │   └── index.rb
+│   └── destroy/
+│       ├── function.json
+│       └── index.rb
+├── authorizers/        # Lambda Authorizer
+│   └── jwt/
+│       ├── function.json
+│       └── index.rb
 └── layers/             # Lambda Layers（共通ライブラリ）
     ├── gems/           # Ruby gems
-    └── shared/         # 共通コード（モデル、ヘルパーなど）
+    │   ├── Gemfile
+    │   ├── Gemfile.lock
+    │   └── build.sh
+    ├── models/         # ActiveRecord モデル
+    │   └── ruby/lib/
+    └── helpers/        # 共通ヘルパー
+        └── ruby/lib/
 ```
 
 ### 2. データベース: Amazon Aurora Serverless v2 (PostgreSQL)
@@ -292,8 +332,10 @@ end
   - **IAM ロール・ポリシー**: Lambda 実行ロール、最小権限の原則
   - **CloudWatch Logs**: ログ保存
   - **Lambda Layers**: 共通ライブラリ
+  - **API Gateway**: REST API、ステージ、リソース、メソッド
 - Terraform state はリモートバックエンド（S3 + DynamoDB）で管理
 - 環境ごとに Terraform workspace を使用
+- Terraform の出力値を lambroll の function.json で参照（tfstate template function）
 
 **ディレクトリ構造:**
 ```

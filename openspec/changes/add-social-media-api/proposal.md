@@ -16,7 +16,7 @@ XのようなSNSアプリケーションのバックエンドAPI を、AWS Lambd
 - **サーバーレスアーキテクチャ**: AWS Lambda + API Gateway を使用
 - **データベース**: Amazon Aurora Serverless v2 (PostgreSQL) を使用
 - **画像ストレージ**: S3 + CloudFront CDN
-- **インフラ管理**: Terraform + Serverless Framework
+- **インフラ管理**: Terraform（インフラ）+ lambroll（Lambda デプロイ）
 
 ### 機能
 - JWT認証によるユーザー認証システムの追加（新規登録、ログイン、ログアウト、ユーザー情報取得）
@@ -53,9 +53,9 @@ XのようなSNSアプリケーションのバックエンドAPI を、AWS Lambd
 - **データベーススキーマ**: User, Post, Like, Comment テーブルの追加（PostgreSQL）
 - **インフラストラクチャ**:
   - terraform/ ディレクトリの追加、AWS リソースの定義
-  - serverless.yml の作成（Serverless Framework）
+  - lambda/ ディレクトリの追加、各Lambda関数の function.json 作成（lambroll）
 - **設定ファイル**:
-  - .gitignore（terraform関連、環境変数）
+  - .gitignore（terraform関連、lambroll関連、環境変数）
   - 環境変数管理（AWS Secrets Manager / Parameter Store）
 
 ### 新しいAWSリソース
@@ -78,8 +78,9 @@ XのようなSNSアプリケーションのバックエンドAPI を、AWS Lambd
 - **API形式**: RESTful JSON API
 - **画像ストレージ**: S3 + CloudFront（Presigned URL による直接アップロード）
 - **APIバージョニング**: /api/v1/ 形式
-- **インフラ管理**: Terraform + Serverless Framework による Infrastructure as Code
-- **Lambda フレームワーク**: Serverless Framework + Ruby カスタムランタイム
+- **インフラ管理**: Terraform による Infrastructure as Code
+- **Lambda デプロイツール**: lambroll（Terraform との連携、tfstate template function）
+- **Lambda ランタイム**: Ruby 3.3 カスタムランタイム
 - **接続管理**: RDS Proxy による接続プール最適化
 - **監視**: CloudWatch Logs + X-Ray トレーシング
 
