@@ -151,68 +151,63 @@
   ```
 - [ ] 3.7 マイグレーションを実行
 
-## 4. lambroll プロジェクトのセットアップ
+## 4. lambroll プロジェクトのセットアップ（ハイブリッドアプローチ）
 
-- [ ] 4.1 lambda/ ディレクトリ構造を作成
+- [ ] 4.1 lambda/ ディレクトリ構造を作成（機能グループごと）
   ```
   lambda/
-  ├── auth/
-  │   ├── register/
-  │   ├── login/
-  │   ├── logout/
-  │   └── me/
-  ├── posts/
-  │   ├── index/
-  │   ├── show/
-  │   ├── create/
-  │   ├── update/
-  │   └── destroy/
-  ├── likes/
-  │   ├── index/
-  │   ├── create/
-  │   └── destroy/
-  ├── comments/
-  │   ├── index/
-  │   ├── create/
-  │   └── destroy/
+  ├── auth/                   # 認証機能グループ
+  │   ├── function.json
+  │   ├── handler.rb
+  │   └── controllers/
+  │       ├── register.rb
+  │       ├── login.rb
+  │       ├── logout.rb
+  │       └── me.rb
+  ├── posts/                  # 投稿機能グループ
+  │   ├── function.json
+  │   ├── handler.rb
+  │   └── controllers/
+  │       ├── index.rb
+  │       ├── show.rb
+  │       ├── create.rb
+  │       ├── update.rb
+  │       ├── destroy.rb
+  │       └── upload_url.rb
+  ├── likes/                  # いいね機能グループ
+  │   ├── function.json
+  │   ├── handler.rb
+  │   └── controllers/
+  │       ├── index.rb
+  │       ├── create.rb
+  │       └── destroy.rb
+  ├── comments/               # コメント機能グループ
+  │   ├── function.json
+  │   ├── handler.rb
+  │   └── controllers/
+  │       ├── index.rb
+  │       ├── create.rb
+  │       └── destroy.rb
   ├── authorizers/
   │   └── jwt/
+  │       ├── function.json
+  │       └── handler.rb
   └── layers/
       ├── gems/
       ├── models/
       └── helpers/
   ```
-- [ ] 4.2 各Lambda関数ディレクトリに function.json テンプレートを作成
-  ```json
-  {
-    "FunctionName": "social-media-api-{function-name}-${env}",
-    "Runtime": "ruby3.3",
-    "Role": "{{ tfstate `aws_iam_role.lambda_exec.arn` }}",
-    "Handler": "index.handler",
-    "MemorySize": 1024,
-    "Timeout": 30,
-    "Environment": {
-      "Variables": {
-        "DB_HOST": "{{ tfstate `aws_rds_proxy.main.endpoint` }}",
-        "DB_NAME": "{{ env `DB_NAME` }}",
-        "S3_BUCKET": "{{ tfstate `aws_s3_bucket.images.id` }}",
-        "CLOUDFRONT_DOMAIN": "{{ tfstate `aws_cloudfront_distribution.main.domain_name` }}",
-        "STAGE": "${env}"
-      }
-    },
-    "VpcConfig": {
-      "SubnetIds": "{{ tfstate `aws_subnet.private[*].id` | to_json }}",
-      "SecurityGroupIds": "{{ tfstate `[aws_security_group.lambda.id]` | to_json }}"
-    },
-    "Layers": [
-      "{{ tfstate `aws_lambda_layer_version.gems.arn` }}",
-      "{{ tfstate `aws_lambda_layer_version.models.arn` }}",
-      "{{ tfstate `aws_lambda_layer_version.helpers.arn` }}"
-    ]
-  }
-  ```
-- [ ] 4.3 .gitignore に lambroll 関連ファイルを追加（*.zip, .lambroll/）
-- [ ] 4.4 .lambroll.yml を作成（lambroll のグローバル設定、オプション）
+- [ ] 4.2 各機能グループに function.json を作成
+  - [ ] lambda/auth/function.json（MemorySize: 512, Timeout: 15）
+  - [ ] lambda/posts/function.json（MemorySize: 1024, Timeout: 30、S3権限必要）
+  - [ ] lambda/likes/function.json（MemorySize: 512, Timeout: 15）
+  - [ ] lambda/comments/function.json（MemorySize: 512, Timeout: 15）
+  - [ ] lambda/authorizers/jwt/function.json（MemorySize: 256, Timeout: 10）
+- [ ] 4.3 各機能グループに handler.rb を作成（API Gateway Proxyパターン）
+  - [ ] ルーティングロジックを実装（httpMethod + path による分岐）
+  - [ ] エラーハンドリングを実装
+- [ ] 4.4 .gitignore に lambroll 関連ファイルを追加（*.zip, .lambroll/）
+- [ ] 4.5 .lambroll.yml を作成（lambroll のグローバル設定、オプション）
 
 ## 5. Lambda Layers の作成
 
@@ -248,222 +243,374 @@
 - [ ] 5.3.4 error_handler.rb を作成（エラーハンドリング）
 - [ ] 5.3.5 Lambda Layer としてパッケージ化
 
-## 6. Lambda Authorizer の実装
+## 6. テスト環境のセットアップ
 
-- [ ] 6.1 lambda/authorizers/jwt/ ディレクトリを作成
-- [ ] 6.2 function.json を作成（Lambda Authorizer 設定）
-- [ ] 6.3 index.rb を実装
+- [ ] 6.1 RSpec をセットアップ
+  - [ ] Gemfile に rspec, rspec-mocks, webmock を追加
+  - [ ] spec/spec_helper.rb を作成
+  - [ ] spec/support/ ディレクトリを作成（共通ヘルパー用）
+- [ ] 6.2 テスト用の Lambda イベントモックを作成
+  - [ ] spec/support/lambda_event_helper.rb（API Gateway Proxy イベントのモック）
+- [ ] 6.3 テスト用のデータベース設定
+  - [ ] spec/support/database_helper.rb（テスト用DB接続、トランザクション）
+- [ ] 6.4 ローカルテスト環境の構築
+  - [ ] Docker Compose で PostgreSQL コンテナを起動（ローカルテスト用）
+  - [ ] テスト用の環境変数を設定（.env.test）
+
+## 7. Lambda Authorizer の実装
+
+- [ ] 7.1 Lambda Authorizer のテスト作成（spec/authorizers/jwt_spec.rb）
+  - [ ] 有効なJWTトークンで認証成功のテスト
+  - [ ] 無効なJWTトークンで認証失敗のテスト
+  - [ ] トークンなしで認証失敗のテスト
+  - [ ] IAM ポリシー生成のテスト
+- [ ] 7.2 lambda/authorizers/jwt/function.json を作成（Lambda Authorizer 設定）
+- [ ] 7.3 lambda/authorizers/jwt/handler.rb を実装
   - [ ] Authorization ヘッダーから JWT トークンを取得
   - [ ] JWT トークンを検証（Secrets Manager から JWT_SECRET を取得）
   - [ ] ユーザー情報を返す（IAM ポリシーと共に）
-- [ ] 6.4 lambroll deploy でデプロイ
-- [ ] 6.5 Terraform で API Gateway Authorizer リソースを作成し、Lambda Authorizer を接続
-- [ ] 6.6 テストを作成
+- [ ] 7.4 テストを実行して全てパスすることを確認
+- [ ] 7.5 lambroll deploy --function authorizers/jwt でデプロイ
+- [ ] 7.6 Terraform で API Gateway Authorizer リソースを作成し、Lambda Authorizer を接続
 
-## 7. 認証 Lambda 関数の実装
+## 8. 認証機能のテスト作成
 
-- [ ] 7.1 lambda/auth/register/ ディレクトリを作成
-- [ ] 7.2 function.json と index.rb を作成（POST /api/v1/auth/register）
+- [ ] 8.1 ユーザー登録のテスト作成（spec/auth/register_spec.rb）
+  - [ ] 有効な情報でユーザー登録成功のテスト
+  - [ ] email重複でユーザー登録失敗のテスト
+  - [ ] username重複でユーザー登録失敗のテスト
+  - [ ] バリデーションエラー（email形式不正）のテスト
+  - [ ] バリデーションエラー（password短すぎる）のテスト
+  - [ ] JWTトークンが返されることのテスト
+- [ ] 8.2 ログインのテスト作成（spec/auth/login_spec.rb）
+  - [ ] 正しいemail/passwordでログイン成功のテスト
+  - [ ] 間違ったpasswordでログイン失敗のテスト
+  - [ ] 存在しないemailでログイン失敗のテスト
+  - [ ] JWTトークンが返されることのテスト
+- [ ] 8.3 ログアウトのテスト作成（spec/auth/logout_spec.rb）
+  - [ ] 認証済みユーザーのログアウト成功のテスト
+  - [ ] 未認証ユーザーのログアウト失敗のテスト
+- [ ] 8.4 ユーザー情報取得のテスト作成（spec/auth/me_spec.rb）
+  - [ ] 認証済みユーザーの情報取得成功のテスト
+  - [ ] 未認証ユーザーの情報取得失敗のテスト
+  - [ ] 削除されたユーザーの情報取得失敗のテスト
+
+## 9. 認証 Lambda 関数の実装（auth 機能グループ）
+
+- [ ] 9.1 lambda/auth/handler.rb を実装（ルーティングロジック）
+  - [ ] httpMethod と path によるルーティング
+  - [ ] POST /api/v1/auth/register → Controllers::Register.call
+  - [ ] POST /api/v1/auth/login → Controllers::Login.call
+  - [ ] DELETE /api/v1/auth/logout → Controllers::Logout.call
+  - [ ] GET /api/v1/auth/me → Controllers::Me.call
+  - [ ] エラーハンドリング（404, 500）
+- [ ] 9.2 lambda/auth/controllers/register.rb を実装
   - [ ] リクエストボディからユーザー情報を取得
   - [ ] バリデーション
   - [ ] User レコードを作成
   - [ ] JWT トークンを生成
   - [ ] レスポンスを返す（ステータスコード 201）
-- [ ] 7.3 lambda/auth/login/ ディレクトリを作成
-- [ ] 7.4 function.json と index.rb を作成（POST /api/v1/auth/login）
+  - [ ] **テストを実行してパスすることを確認**
+- [ ] 9.3 lambda/auth/controllers/login.rb を実装
   - [ ] email と password を取得
   - [ ] ユーザーを検証
   - [ ] JWT トークンを生成
   - [ ] レスポンスを返す（ステータスコード 200）
-- [ ] 7.5 lambda/auth/logout/ ディレクトリを作成
-- [ ] 7.6 function.json と index.rb を作成（DELETE /api/v1/auth/logout）
+  - [ ] **テストを実行してパスすることを確認**
+- [ ] 9.4 lambda/auth/controllers/logout.rb を実装
   - [ ] トークンブラックリスト機能（オプション、DynamoDB 使用）
   - [ ] レスポンスを返す（ステータスコード 200）
-- [ ] 7.7 lambda/auth/me/ ディレクトリを作成
-- [ ] 7.8 function.json と index.rb を作成（GET /api/v1/auth/me）
-  - [ ] Authorizer から user_id を取得
+  - [ ] **テストを実行してパスすることを確認**
+- [ ] 9.5 lambda/auth/controllers/me.rb を実装
+  - [ ] Authorizer から user_id を取得（event['requestContext']['authorizer']['principalId']）
   - [ ] User レコードを取得
   - [ ] レスポンスを返す（ステータスコード 200）
-- [ ] 7.9 lambroll deploy で各 Lambda 関数をデプロイ
-- [ ] 7.10 Terraform で API Gateway のリソース、メソッド、統合を作成し、Lambda 関数を接続
+  - [ ] **テストを実行してパスすることを確認**
+- [ ] 9.6 全テストを実行して全てパスすることを確認
+- [ ] 9.7 lambroll deploy --function auth でデプロイ
+- [ ] 9.8 Terraform で API Gateway の /api/v1/auth/{proxy+} リソースを作成
+  - [ ] ANY メソッドで Lambda Proxy統合
+  - [ ] Authorizer を me エンドポイントのみ適用（リソースポリシーで制御）
 
-## 8. 投稿 Lambda 関数の実装
+## 10. 投稿機能のテスト作成
 
-- [ ] 8.1 lambda/posts/index/ に function.json と index.rb を作成（GET /api/v1/posts）
+- [ ] 10.1 投稿一覧取得のテスト作成（spec/posts/index_spec.rb）
+  - [ ] 投稿一覧を取得成功のテスト
+  - [ ] ページネーションのテスト
+  - [ ] 空の投稿一覧のテスト
+- [ ] 10.2 投稿詳細取得のテスト作成（spec/posts/show_spec.rb）
+  - [ ] 投稿詳細を取得成功のテスト
+  - [ ] 存在しない投稿IDで404エラーのテスト
+  - [ ] is_likedフラグが正しく返されるテスト
+- [ ] 10.3 投稿作成のテスト作成（spec/posts/create_spec.rb）
+  - [ ] 有効な内容で投稿作成成功のテスト
+  - [ ] 画像付き投稿作成成功のテスト
+  - [ ] 空の内容で投稿作成失敗のテスト
+  - [ ] 280文字超過で投稿作成失敗のテスト
+  - [ ] 未認証で投稿作成失敗のテスト
+- [ ] 10.4 投稿更新のテスト作成（spec/posts/update_spec.rb）
+  - [ ] 自分の投稿の更新成功のテスト
+  - [ ] 他人の投稿の更新失敗（403）のテスト
+  - [ ] 未認証で投稿更新失敗のテスト
+- [ ] 10.5 投稿削除のテスト作成（spec/posts/destroy_spec.rb）
+  - [ ] 自分の投稿の削除成功のテスト
+  - [ ] 他人の投稿の削除失敗（403）のテスト
+  - [ ] S3から画像も削除されることのテスト
+  - [ ] 未認証で投稿削除失敗のテスト
+- [ ] 10.6 画像アップロードURLのテスト作成（spec/posts/upload_url_spec.rb）
+  - [ ] Presigned URL生成成功のテスト
+  - [ ] 未認証でPresigned URL生成失敗のテスト
+
+## 11. 投稿 Lambda 関数の実装（posts 機能グループ）
+
+- [ ] 11.1 lambda/posts/handler.rb を実装（ルーティングロジック）
+  - [ ] httpMethod と path によるルーティング
+  - [ ] GET /api/v1/posts → Controllers::Index.call
+  - [ ] GET /api/v1/posts/:id → Controllers::Show.call
+  - [ ] POST /api/v1/posts → Controllers::Create.call
+  - [ ] PUT /api/v1/posts/:id → Controllers::Update.call
+  - [ ] DELETE /api/v1/posts/:id → Controllers::Destroy.call
+  - [ ] POST /api/v1/posts/upload-url → Controllers::UploadUrl.call
+  - [ ] パスパラメータの抽出（正規表現で :id を取得）
+- [ ] 11.2 lambda/posts/controllers/index.rb を実装
   - [ ] ページネーション処理（offset ベース）
   - [ ] Post 一覧を取得（N+1クエリ対策）
   - [ ] レスポンスを返す（ステータスコード 200）
-- [ ] 8.2 lambda/posts/show/ に function.json と index.rb を作成（GET /api/v1/posts/:id）
+  - [ ] **テストを実行してパスすることを確認**
+- [ ] 11.3 lambda/posts/controllers/show.rb を実装
   - [ ] id パラメータから Post を取得
   - [ ] is_liked フラグを含める（認証済みユーザーの場合）
   - [ ] レスポンスを返す（ステータスコード 200）
-- [ ] 8.3 lambda/posts/create/ に function.json と index.rb を作成（POST /api/v1/posts）
+  - [ ] **テストを実行してパスすることを確認**
+- [ ] 11.4 lambda/posts/controllers/create.rb を実装
   - [ ] Authorizer から user_id を取得
   - [ ] リクエストボディから投稿内容を取得
   - [ ] 画像キーがある場合、CloudFront URL を生成
   - [ ] Post レコードを作成
   - [ ] レスポンスを返す（ステータスコード 201）
-- [ ] 8.4 lambda/posts/update/ に function.json と index.rb を作成（PUT /api/v1/posts/:id）
+  - [ ] **テストを実行してパスすることを確認**
+- [ ] 11.5 lambda/posts/controllers/update.rb を実装
   - [ ] 権限チェック（自分の投稿のみ）
   - [ ] Post レコードを更新
   - [ ] レスポンスを返す（ステータスコード 200）
-- [ ] 8.5 lambda/posts/destroy/ に function.json と index.rb を作成（DELETE /api/v1/posts/:id）
+  - [ ] **テストを実行してパスすることを確認**
+- [ ] 11.6 lambda/posts/controllers/destroy.rb を実装
   - [ ] 権限チェック（自分の投稿のみ）
   - [ ] Post レコードを削除（cascade で likes, comments も削除）
   - [ ] S3 から画像を削除
   - [ ] レスポンスを返す（ステータスコード 200）
-- [ ] 8.6 lambda/posts/upload_url/ に function.json と index.rb を作成（POST /api/v1/posts/upload-url）
+  - [ ] **テストを実行してパスすることを確認**
+- [ ] 11.7 lambda/posts/controllers/upload_url.rb を実装
   - [ ] Authorizer から user_id を取得
   - [ ] S3 Presigned URL を生成（PutObject 権限、10分間有効）
   - [ ] レスポンスを返す（presigned_url, image_key）
-- [ ] 8.7 lambroll deploy で各 Lambda 関数をデプロイ
-- [ ] 8.8 Terraform で API Gateway エンドポイントを設定（Authorizer を適用）
+  - [ ] **テストを実行してパスすることを確認**
+- [ ] 11.8 全テストを実行して全てパスすることを確認
+- [ ] 11.9 lambroll deploy --function posts でデプロイ
+- [ ] 11.10 Terraform で API Gateway の /api/v1/posts/{proxy+} リソースを作成
+  - [ ] ANY メソッドで Lambda Proxy統合
+  - [ ] Authorizer を適用（create, update, destroy, upload-url に必要）
 
-## 9. いいね Lambda 関数の実装
+## 12. いいね機能のテスト作成
 
-- [ ] 9.1 lambda/likes/index/ に function.json と index.rb を作成（GET /api/v1/posts/:post_id/likes）
+- [ ] 12.1 いいね一覧取得のテスト作成（spec/likes/index_spec.rb）
+  - [ ] 投稿のいいね一覧を取得成功のテスト
+  - [ ] いいねがゼロの投稿のテスト
+  - [ ] ユーザー情報が正しく含まれるテスト
+- [ ] 12.2 いいね追加のテスト作成（spec/likes/create_spec.rb）
+  - [ ] 投稿にいいね追加成功のテスト
+  - [ ] 既にいいねした投稿に再度いいね失敗（422）のテスト
+  - [ ] 存在しない投稿にいいね失敗（404）のテスト
+  - [ ] いいね数（likes_count）が増加することのテスト
+  - [ ] 未認証でいいね失敗のテスト
+- [ ] 12.3 いいね削除のテスト作成（spec/likes/destroy_spec.rb）
+  - [ ] 自分のいいね削除成功のテスト
+  - [ ] いいねしていない投稿のいいね削除失敗（404）のテスト
+  - [ ] いいね数（likes_count）が減少することのテスト
+  - [ ] 未認証でいいね削除失敗のテスト
+
+## 13. いいね Lambda 関数の実装（likes 機能グループ）
+
+- [ ] 13.1 lambda/likes/handler.rb を実装（ルーティングロジック）
+  - [ ] httpMethod と path によるルーティング
+  - [ ] GET /api/v1/posts/:post_id/likes → Controllers::Index.call
+  - [ ] POST /api/v1/posts/:post_id/likes → Controllers::Create.call
+  - [ ] DELETE /api/v1/posts/:post_id/likes → Controllers::Destroy.call
+  - [ ] パスパラメータの抽出（:post_id）
+- [ ] 13.2 lambda/likes/controllers/index.rb を実装
   - [ ] post_id から Like 一覧を取得
   - [ ] ユーザー情報を含める
   - [ ] レスポンスを返す（ステータスコード 200）
-- [ ] 9.2 lambda/likes/create/ に function.json と index.rb を作成（POST /api/v1/posts/:post_id/likes）
+  - [ ] **テストを実行してパスすることを確認**
+- [ ] 13.3 lambda/likes/controllers/create.rb を実装
   - [ ] Authorizer から user_id を取得
   - [ ] 重複チェック
   - [ ] Like レコードを作成
   - [ ] Post の likes_count を +1
   - [ ] レスポンスを返す（ステータスコード 201）
-- [ ] 9.3 lambda/likes/destroy/ に function.json と index.rb を作成（DELETE /api/v1/posts/:post_id/likes）
+  - [ ] **テストを実行してパスすることを確認**
+- [ ] 13.4 lambda/likes/controllers/destroy.rb を実装
   - [ ] Authorizer から user_id を取得
   - [ ] Like レコードを削除
   - [ ] Post の likes_count を -1
   - [ ] レスポンスを返す（ステータスコード 200）
-- [ ] 9.4 lambroll deploy で各 Lambda 関数をデプロイ
-- [ ] 9.5 Terraform で API Gateway エンドポイントを設定（Authorizer を適用）
+  - [ ] **テストを実行してパスすることを確認**
+- [ ] 13.5 全テストを実行して全てパスすることを確認
+- [ ] 13.6 lambroll deploy --function likes でデプロイ
+- [ ] 13.7 Terraform で API Gateway の /api/v1/posts/{post_id}/likes リソースを作成
+  - [ ] Lambda Proxy統合
+  - [ ] Authorizer を適用（create, destroy に必要）
 
-## 10. コメント Lambda 関数の実装
+## 14. コメント機能のテスト作成
 
-- [ ] 10.1 lambda/comments/index/ に function.json と index.rb を作成（GET /api/v1/posts/:post_id/comments）
+- [ ] 14.1 コメント一覧取得のテスト作成（spec/comments/index_spec.rb）
+  - [ ] 投稿のコメント一覧を取得成功のテスト（古い順）
+  - [ ] ページネーションのテスト
+  - [ ] コメントがゼロの投稿のテスト
+  - [ ] ユーザー情報が正しく含まれるテスト
+- [ ] 14.2 コメント追加のテスト作成（spec/comments/create_spec.rb）
+  - [ ] 投稿にコメント追加成功のテスト
+  - [ ] 空のコメント内容で失敗（422）のテスト
+  - [ ] 280文字超過で失敗（422）のテスト
+  - [ ] 存在しない投稿にコメント失敗（404）のテスト
+  - [ ] コメント数（comments_count）が増加することのテスト
+  - [ ] 未認証でコメント追加失敗のテスト
+- [ ] 14.3 コメント削除のテスト作成（spec/comments/destroy_spec.rb）
+  - [ ] 自分のコメント削除成功のテスト
+  - [ ] 他人のコメント削除失敗（403）のテスト
+  - [ ] コメント数（comments_count）が減少することのテスト
+  - [ ] 未認証でコメント削除失敗のテスト
+  - [ ] 存在しないコメント削除失敗（404）のテスト
+
+## 15. コメント Lambda 関数の実装（comments 機能グループ）
+
+- [ ] 15.1 lambda/comments/handler.rb を実装（ルーティングロジック）
+  - [ ] httpMethod と path によるルーティング
+  - [ ] GET /api/v1/posts/:post_id/comments → Controllers::Index.call
+  - [ ] POST /api/v1/posts/:post_id/comments → Controllers::Create.call
+  - [ ] DELETE /api/v1/comments/:id → Controllers::Destroy.call
+  - [ ] パスパラメータの抽出（:post_id, :id）
+- [ ] 15.2 lambda/comments/controllers/index.rb を実装
   - [ ] post_id から Comment 一覧を取得（古い順）
   - [ ] ページネーション処理
   - [ ] ユーザー情報を含める
   - [ ] レスポンスを返す（ステータスコード 200）
-- [ ] 10.2 lambda/comments/create/ に function.json と index.rb を作成（POST /api/v1/posts/:post_id/comments）
+  - [ ] **テストを実行してパスすることを確認**
+- [ ] 15.3 lambda/comments/controllers/create.rb を実装
   - [ ] Authorizer から user_id を取得
   - [ ] バリデーション
   - [ ] Comment レコードを作成
   - [ ] Post の comments_count を +1
   - [ ] レスポンスを返す（ステータスコード 201）
-- [ ] 10.3 lambda/comments/destroy/ に function.json と index.rb を作成（DELETE /api/v1/comments/:id）
+  - [ ] **テストを実行してパスすることを確認**
+- [ ] 15.4 lambda/comments/controllers/destroy.rb を実装
   - [ ] 権限チェック（自分のコメントのみ）
   - [ ] Comment レコードを削除
   - [ ] Post の comments_count を -1
   - [ ] レスポンスを返す（ステータスコード 200）
-- [ ] 10.4 lambroll deploy で各 Lambda 関数をデプロイ
-- [ ] 10.5 Terraform で API Gateway エンドポイントを設定（Authorizer を適用）
+  - [ ] **テストを実行してパスすることを確認**
+- [ ] 15.5 全テストを実行して全てパスすることを確認
+- [ ] 15.6 lambroll deploy --function comments でデプロイ
+- [ ] 15.7 Terraform で API Gateway のリソースを作成
+  - [ ] /api/v1/posts/{post_id}/comments（Lambda Proxy統合）
+  - [ ] /api/v1/comments/{id}（Lambda Proxy統合）
+  - [ ] Authorizer を適用（create, destroy に必要）
 
-## 11. エラーハンドリングとバリデーション
+## 16. エラーハンドリングとバリデーション
 
-- [ ] 11.1 共通エラーハンドラーを Helpers Layer に追加
-- [ ] 11.2 カスタムエラーレスポンスを定義（JSON 形式）
-- [ ] 11.3 各 Lambda 関数にエラーハンドリングを追加
+- [ ] 16.1 共通エラーハンドラーを Helpers Layer に追加
+- [ ] 16.2 カスタムエラーレスポンスを定義（JSON 形式）
+- [ ] 16.3 各 Lambda 関数にエラーハンドリングを追加
   - [ ] 404: Not Found
   - [ ] 401: Unauthorized
   - [ ] 403: Forbidden
   - [ ] 422: Unprocessable Entity
   - [ ] 500: Internal Server Error
-- [ ] 11.4 バリデーションエラーメッセージのフォーマット統一
+- [ ] 16.4 バリデーションエラーメッセージのフォーマット統一
 
-## 12. API Gateway の設定
+## 17. API Gateway の設定
 
-- [ ] 12.1 Terraform で CORS を有効化（Gateway Response の設定）
-- [ ] 12.2 API キーを設定（Terraform、オプション）
-- [ ] 12.3 スロットリング設定を追加（Terraform、レート制限）
+- [ ] 17.1 Terraform で CORS を有効化（Gateway Response の設定）
+- [ ] 17.2 API キーを設定（Terraform、オプション）
+- [ ] 17.3 スロットリング設定を追加（Terraform、レート制限）
   - [ ] リクエストレート: 100 req/sec
   - [ ] バーストレート: 200 req
-- [ ] 12.4 ステージを作成（Terraform、dev, staging, prod）
-- [ ] 12.5 カスタムドメイン設定（Terraform、オプション、Route 53 + ACM 証明書）
-- [ ] 12.6 デプロイメントを作成し、ステージに紐付け
+- [ ] 17.4 ステージを作成（Terraform、dev, staging, prod）
+- [ ] 17.5 カスタムドメイン設定（Terraform、オプション、Route 53 + ACM 証明書）
+- [ ] 17.6 デプロイメントを作成し、ステージに紐付け
 
-## 13. CloudWatch Logs + X-Ray の設定
+## 18. CloudWatch Logs + X-Ray の設定
 
-- [ ] 13.1 CloudWatch Logs を有効化（Lambda 作成時に自動的に作成される）
-- [ ] 13.2 X-Ray トレーシングを有効化
+- [ ] 18.1 CloudWatch Logs を有効化（Lambda 作成時に自動的に作成される）
+- [ ] 18.2 X-Ray トレーシングを有効化
   - [ ] Lambda の function.json に `"TracingConfig": {"Mode": "Active"}` を追加
   - [ ] Terraform で API Gateway のトレーシングを有効化
   - [ ] IAM ロールに X-Ray 書き込み権限を追加
-- [ ] 13.3 Terraform で CloudWatch Alarms を作成
+- [ ] 18.3 Terraform で CloudWatch Alarms を作成
   - [ ] Lambda エラー率 > 5%
   - [ ] API Gateway 4xx エラー率 > 10%
   - [ ] API Gateway 5xx エラー率 > 1%
   - [ ] Lambda Duration > 5秒
-- [ ] 13.4 Terraform で CloudWatch ダッシュボードを作成
+- [ ] 18.4 Terraform で CloudWatch ダッシュボードを作成
 
-## 14. テストの作成
+## 19. 統合テストとE2Eテスト
 
-- [ ] 14.1 RSpec をセットアップ
-- [ ] 14.2 ユーザー認証のテスト
-  - [ ] register のユニットテスト
-  - [ ] login のユニットテスト
-  - [ ] バリデーションのテスト
-- [ ] 14.3 投稿機能のテスト
-  - [ ] CRUD操作のテスト
-  - [ ] 権限チェックのテスト
-  - [ ] 画像アップロードのテスト
-- [ ] 14.4 いいね機能のテスト
-  - [ ] いいね追加・削除のテスト
-  - [ ] カウンター更新のテスト
-- [ ] 14.5 コメント機能のテスト
-  - [ ] コメント追加・削除のテスト
-  - [ ] カウンター更新のテスト
-- [ ] 14.6 Localstack で統合テスト（オプション）
-- [ ] 14.7 E2E テスト（Postman/Newman）
+- [ ] 19.1 Localstack で統合テスト（オプション）
+  - [ ] Localstack で Lambda, API Gateway, S3 を起動
+  - [ ] 統合テストを実行
+- [ ] 19.2 E2E テスト（Postman/Newman）
+  - [ ] Postman Collection を作成
+  - [ ] 全エンドポイントのE2Eテストを作成
+  - [ ] Newman で CI/CD パイプラインに統合
 
-## 15. Seedデータの作成
+## 20. Seedデータの作成
 
-- [ ] 15.1 seeds/ ディレクトリを作成
-- [ ] 15.2 seed.rb を作成（サンプルユーザー、投稿、いいね、コメント）
-- [ ] 15.3 seed.rb を実行してデータを投入
+- [ ] 20.1 seeds/ ディレクトリを作成
+- [ ] 20.2 seed.rb を作成（サンプルユーザー、投稿、いいね、コメント）
+- [ ] 20.3 seed.rb を実行してデータを投入
 
-## 16. デプロイとドキュメント
+## 21. デプロイとドキュメント
 
-- [ ] 16.1 Terraform で開発環境のインフラをデプロイ（`terraform apply`）
-- [ ] 16.2 lambroll で全Lambda関数をデプロイ（`lambroll deploy --all`）
-- [ ] 16.3 API Gateway のエンドポイント URL を取得（Terraform output）
-- [ ] 16.4 README.md を更新
+- [ ] 21.1 Terraform で開発環境のインフラをデプロイ（`terraform apply`）
+- [ ] 21.2 lambroll で全Lambda関数をデプロイ（`lambroll deploy --all`）
+- [ ] 21.3 API Gateway のエンドポイント URL を取得（Terraform output）
+- [ ] 21.4 README.md を更新
   - [ ] アーキテクチャ図を追加
   - [ ] API エンドポイント一覧を記載
   - [ ] 認証方法（JWT）の使い方を記載
   - [ ] Terraform によるインフラセットアップ手順を記載
   - [ ] lambroll によるLambdaデプロイ手順を記載
   - [ ] 環境変数の設定方法を記載
-  - [ ] ローカル開発のセットアップ手順を記載
-- [ ] 16.5 OpenAPI (Swagger) 仕様を生成
+  - [ ] ローカル開発・テストのセットアップ手順を記載（TDDワークフロー）
+- [ ] 21.5 OpenAPI (Swagger) 仕様を生成
   - [ ] API Gateway から OpenAPI 仕様をエクスポート（AWS CLI または Terraform）
   - [ ] Swagger UI で表示できるように設定
 
-## 17. 最終確認とテスト
+## 22. 最終確認とテスト
 
-- [ ] 17.1 全ての Lambda 関数の動作確認
-- [ ] 17.2 API Gateway のエンドポイント確認
-- [ ] 17.3 Postman で API テストを実行
-- [ ] 17.4 CloudWatch Logs でログを確認
-- [ ] 17.5 X-Ray でトレースを確認
-- [ ] 17.6 CloudWatch Alarms が正しく設定されているか確認
-- [ ] 17.7 S3 への画像アップロードの動作確認
-- [ ] 17.8 CloudFront 経由での画像配信確認
-- [ ] 17.9 Aurora Serverless v2 のスケーリング確認
-- [ ] 17.10 Lambda のコールドスタート時間を計測
-- [ ] 17.11 セキュリティチェック
+- [ ] 22.1 全ての Lambda 関数の動作確認
+- [ ] 22.2 API Gateway のエンドポイント確認
+- [ ] 22.3 全テストスイートの実行（RSpec）
+- [ ] 22.4 E2E テストの実行（Postman/Newman）
+- [ ] 22.5 CloudWatch Logs でログを確認
+- [ ] 22.6 X-Ray でトレースを確認
+- [ ] 22.7 CloudWatch Alarms が正しく設定されているか確認
+- [ ] 22.8 S3 への画像アップロードの動作確認
+- [ ] 22.9 CloudFront 経由での画像配信確認
+- [ ] 22.10 Aurora Serverless v2 のスケーリング確認
+- [ ] 22.11 Lambda のコールドスタート時間を計測
+- [ ] 22.12 セキュリティチェック
   - [ ] IAM ポリシーの最小権限確認
   - [ ] VPC 設定の確認
   - [ ] S3 バケットのパブリックアクセスブロック確認
   - [ ] Secrets Manager の認証情報確認
 
-## 18. 本番環境へのデプロイ
+## 23. 本番環境へのデプロイ
 
-- [ ] 18.1 本番環境用の terraform workspace を作成
-- [ ] 18.2 terraform apply --workspace=prod を実行（本番インフラのデプロイ）
-- [ ] 18.3 本番環境用の環境変数を設定（env=prod）
-- [ ] 18.4 lambroll deploy --all を実行（本番環境のLambda関数をデプロイ）
-- [ ] 18.5 本番環境の動作確認
-- [ ] 18.6 監視とアラートの設定を確認
-- [ ] 18.7 バックアップの設定を確認（RDS 自動バックアップ）
+- [ ] 23.1 本番環境用の terraform workspace を作成
+- [ ] 23.2 terraform apply --workspace=prod を実行（本番インフラのデプロイ）
+- [ ] 23.3 本番環境用の環境変数を設定（env=prod）
+- [ ] 23.4 lambroll deploy --all を実行（本番環境のLambda関数をデプロイ）
+- [ ] 23.5 本番環境の動作確認
+- [ ] 23.6 監視とアラートの設定を確認
+- [ ] 23.7 バックアップの設定を確認（RDS 自動バックアップ）

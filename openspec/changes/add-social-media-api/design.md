@@ -67,72 +67,96 @@ XのようなSNSアプリケーションのバックエンドAPIを、AWS Lambda
   - 予約済み同時実行数: 最低5（コールドスタート対策）
   - Provisioned Concurrency: 本番環境で検討（コスト vs パフォーマンス）
 
-**Lambda 関数の構成（lambroll 用）:**
+**Lambda 関数の構成（ハイブリッドアプローチ - 機能グループごと）:**
 ```
 lambda/
-├── auth/               # 認証関連の Lambda 関数
-│   ├── register/
-│   │   ├── function.json
-│   │   └── index.rb
-│   ├── login/
-│   │   ├── function.json
-│   │   └── index.rb
-│   ├── logout/
-│   │   ├── function.json
-│   │   └── index.rb
-│   └── me/
-│       ├── function.json
-│       └── index.rb
-├── posts/              # 投稿関連
-│   ├── index/
-│   │   ├── function.json
-│   │   └── index.rb
-│   ├── show/
-│   │   ├── function.json
-│   │   └── index.rb
-│   ├── create/
-│   │   ├── function.json
-│   │   └── index.rb
-│   ├── update/
-│   │   ├── function.json
-│   │   └── index.rb
-│   └── destroy/
-│       ├── function.json
-│       └── index.rb
-├── likes/              # いいね関連
-│   ├── index/
-│   │   ├── function.json
-│   │   └── index.rb
-│   ├── create/
-│   │   ├── function.json
-│   │   └── index.rb
-│   └── destroy/
-│       ├── function.json
-│       └── index.rb
-├── comments/           # コメント関連
-│   ├── index/
-│   │   ├── function.json
-│   │   └── index.rb
-│   ├── create/
-│   │   ├── function.json
-│   │   └── index.rb
-│   └── destroy/
-│       ├── function.json
-│       └── index.rb
-├── authorizers/        # Lambda Authorizer
+├── auth/                   # 認証機能グループ
+│   ├── function.json       # lambroll設定
+│   ├── handler.rb          # メインハンドラー（ルーティング）
+│   └── controllers/        # 各エンドポイントのロジック
+│       ├── register.rb     # POST /api/v1/auth/register
+│       ├── login.rb        # POST /api/v1/auth/login
+│       ├── logout.rb       # DELETE /api/v1/auth/logout
+│       └── me.rb           # GET /api/v1/auth/me
+├── posts/                  # 投稿機能グループ
+│   ├── function.json
+│   ├── handler.rb
+│   └── controllers/
+│       ├── index.rb        # GET /api/v1/posts
+│       ├── show.rb         # GET /api/v1/posts/:id
+│       ├── create.rb       # POST /api/v1/posts
+│       ├── update.rb       # PUT /api/v1/posts/:id
+│       ├── destroy.rb      # DELETE /api/v1/posts/:id
+│       └── upload_url.rb   # POST /api/v1/posts/upload-url
+├── likes/                  # いいね機能グループ
+│   ├── function.json
+│   ├── handler.rb
+│   └── controllers/
+│       ├── index.rb        # GET /api/v1/posts/:post_id/likes
+│       ├── create.rb       # POST /api/v1/posts/:post_id/likes
+│       └── destroy.rb      # DELETE /api/v1/posts/:post_id/likes
+├── comments/               # コメント機能グループ
+│   ├── function.json
+│   ├── handler.rb
+│   └── controllers/
+│       ├── index.rb        # GET /api/v1/posts/:post_id/comments
+│       ├── create.rb       # POST /api/v1/posts/:post_id/comments
+│       └── destroy.rb      # DELETE /api/v1/comments/:id
+├── authorizers/            # Lambda Authorizer
 │   └── jwt/
 │       ├── function.json
-│       └── index.rb
-└── layers/             # Lambda Layers（共通ライブラリ）
-    ├── gems/           # Ruby gems
+│       └── handler.rb
+└── layers/                 # Lambda Layers（共通ライブラリ）
+    ├── gems/               # Ruby gems（Sinatra等含む）
     │   ├── Gemfile
     │   ├── Gemfile.lock
     │   └── build.sh
-    ├── models/         # ActiveRecord モデル
+    ├── models/             # ActiveRecord モデル
     │   └── ruby/lib/
-    └── helpers/        # 共通ヘルパー
+    └── helpers/            # 共通ヘルパー
         └── ruby/lib/
 ```
+
+**ハンドラーの実装例（API Gateway Proxy統合）:**
+```ruby
+# lambda/auth/handler.rb
+require 'json'
+require_relative 'controllers/register'
+require_relative 'controllers/login'
+require_relative 'controllers/logout'
+require_relative 'controllers/me'
+
+def handler(event:, context:)
+  path = event['path']
+  method = event['httpMethod']
+
+  # ルーティング
+  case [method, path]
+  when ['POST', '/api/v1/auth/register']
+    Controllers::Register.call(event)
+  when ['POST', '/api/v1/auth/login']
+    Controllers::Login.call(event)
+  when ['DELETE', '/api/v1/auth/logout']
+    Controllers::Logout.call(event)
+  when ['GET', '/api/v1/auth/me']
+    Controllers::Me.call(event)
+  else
+    {
+      statusCode: 404,
+      body: JSON.generate({ error: 'Not Found' })
+    }
+  end
+rescue => e
+  {
+    statusCode: 500,
+    body: JSON.generate({ error: e.message })
+  }
+end
+```
+
+**Lambda関数数の削減:**
+- マイクロLambda: 15個 → ハイブリッド: **5個**（auth, posts, likes, comments, jwt_authorizer）
+- 管理コストを削減しつつ、機能グループごとの独立性を維持
 
 ### 2. データベース: Amazon Aurora Serverless v2 (PostgreSQL)
 
@@ -179,22 +203,22 @@ lambda/
 
 **実装詳細:**
 
-各Lambda関数ごとにディレクトリと設定ファイルを配置：
+各機能グループごとにディレクトリと設定ファイルを配置：
 
 ```json
-// lambda/auth/register/function.json
+// lambda/auth/function.json
 {
-  "FunctionName": "social-media-api-auth-register-${env}",
+  "FunctionName": "social-media-api-auth-${env}",
   "Runtime": "ruby3.3",
   "Role": "{{ tfstate `aws_iam_role.lambda_exec.arn` }}",
-  "Handler": "index.handler",
-  "MemorySize": 1024,
-  "Timeout": 30,
+  "Handler": "handler.handler",
+  "MemorySize": 512,
+  "Timeout": 15,
   "Environment": {
     "Variables": {
       "DB_HOST": "{{ tfstate `aws_rds_proxy.main.endpoint` }}",
       "DB_NAME": "{{ env `DB_NAME` }}",
-      "S3_BUCKET": "{{ tfstate `aws_s3_bucket.images.id` }}",
+      "JWT_SECRET_ARN": "{{ tfstate `aws_secretsmanager_secret.jwt_secret.arn` }}",
       "STAGE": "${env}"
     }
   },
@@ -204,62 +228,72 @@ lambda/
   },
   "Layers": [
     "{{ tfstate `aws_lambda_layer_version.gems.arn` }}",
-    "{{ tfstate `aws_lambda_layer_version.models.arn` }}"
-  ]
+    "{{ tfstate `aws_lambda_layer_version.models.arn` }}",
+    "{{ tfstate `aws_lambda_layer_version.helpers.arn` }}"
+  ],
+  "TracingConfig": {
+    "Mode": "Active"
+  }
+}
+```
+
+```json
+// lambda/posts/function.json
+{
+  "FunctionName": "social-media-api-posts-${env}",
+  "Runtime": "ruby3.3",
+  "Role": "{{ tfstate `aws_iam_role.lambda_exec.arn` }}",
+  "Handler": "handler.handler",
+  "MemorySize": 1024,
+  "Timeout": 30,
+  "Environment": {
+    "Variables": {
+      "DB_HOST": "{{ tfstate `aws_rds_proxy.main.endpoint` }}",
+      "DB_NAME": "{{ env `DB_NAME` }}",
+      "S3_BUCKET": "{{ tfstate `aws_s3_bucket.images.id` }}",
+      "CLOUDFRONT_DOMAIN": "{{ tfstate `aws_cloudfront_distribution.main.domain_name` }}",
+      "STAGE": "${env}"
+    }
+  },
+  "VpcConfig": {
+    "SubnetIds": "{{ tfstate `aws_subnet.private[*].id` | to_json }}",
+    "SecurityGroupIds": "{{ tfstate `[aws_security_group.lambda.id]` | to_json }}"
+  },
+  "Layers": [
+    "{{ tfstate `aws_lambda_layer_version.gems.arn` }}",
+    "{{ tfstate `aws_lambda_layer_version.models.arn` }}",
+    "{{ tfstate `aws_lambda_layer_version.helpers.arn` }}"
+  ],
+  "TracingConfig": {
+    "Mode": "Active"
+  }
 }
 ```
 
 **lambroll コマンド:**
 ```bash
-# Lambda関数のデプロイ
-lambroll deploy --function auth/register
+# 機能グループごとのデプロイ
+lambroll deploy --function auth
+lambroll deploy --function posts
 
 # 全関数のデプロイ
 lambroll deploy --all
 
 # デプロイ前の差分確認
-lambroll diff --function auth/register
+lambroll diff --function auth
 
 # ロールバック
-lambroll rollback --function auth/register
+lambroll rollback --function auth
 
 # ログの確認
-lambroll logs --function auth/register --follow
+lambroll logs --function auth --follow
 
-# Lambda関数の実行
-lambroll invoke --function auth/register --payload '{"body":"{}"}'
-```
-
-**ディレクトリ構造:**
-```
-lambda/
-├── auth/
-│   ├── register/
-│   │   ├── function.json        # lambroll設定
-│   │   └── index.rb             # ハンドラー
-│   ├── login/
-│   │   ├── function.json
-│   │   └── index.rb
-│   ├── logout/
-│   │   ├── function.json
-│   │   └── index.rb
-│   └── me/
-│       ├── function.json
-│       └── index.rb
-├── posts/
-│   ├── index/
-│   ├── show/
-│   ├── create/
-│   ├── update/
-│   └── destroy/
-├── likes/
-│   ├── index/
-│   ├── create/
-│   └── destroy/
-└── comments/
-    ├── index/
-    ├── create/
-    └── destroy/
+# Lambda関数の実行（API Gateway Proxy形式）
+lambroll invoke --function auth --payload '{
+  "httpMethod": "POST",
+  "path": "/api/v1/auth/login",
+  "body": "{\"email\":\"test@example.com\",\"password\":\"password123\"}"
+}'
 ```
 
 ### 4. 認証システム: JWT (JSON Web Token)
@@ -560,18 +594,35 @@ API Gateway は 29秒でタイムアウトする。
 - 開発環境: オンデマンド
 - 本番環境: ピーク時のみ Provisioned Concurrency
 
-### トレードオフ2: モノリシック Lambda vs マイクロ Lambda
+### トレードオフ2: Lambda 関数の粒度
 
-**選択: マイクロ Lambda（1エンドポイント = 1 Lambda 関数）**
+**選択: ハイブリッドアプローチ（機能グループごとに Lambda 関数を分割）**
 
-**理由:**
-- デプロイが独立している
-- 個別にスケーリング可能
-- 障害の影響範囲が限定される
+**Lambda関数構成:**
+- auth_function: 認証関連（4エンドポイント）
+- posts_function: 投稿関連（6エンドポイント）
+- likes_function: いいね関連（3エンドポイント）
+- comments_function: コメント関連（3エンドポイント）
+- jwt_authorizer: JWT認証（1関数）
+- **合計: 5個の Lambda 関数**
+
+**メリット（マイクロLambdaとモノリシックLambdaの良いとこ取り）:**
+- **管理コスト削減**: 15個→5個に削減、デプロイが簡素化
+- **機能グループごとの独立性**: 認証機能と投稿機能は独立してスケール
+- **適度なコードサイズ**: 各関数 10-20MB 程度、コールドスタート 1-2秒
+- **柔軟な設定**: posts_function だけメモリ/タイムアウトを大きく設定可能
+- **障害の局所化**: 投稿機能のバグが認証機能に影響しない
+- **共通コード共有**: 機能グループ内ではコードを直接共有、Lambda Layers も併用
+- **ローカル開発**: 機能グループごとに開発・テスト可能
 
 **デメリット:**
-- 管理する Lambda 関数が増える
-- 共通コードの管理が複雑（Lambda Layers で解決）
+- **エンドポイント間の独立性低下**: 同じ関数内のエンドポイントは一緒にデプロイ
+- **ルーティング実装**: 各関数内でルーティングロジックが必要（API Gateway Proxyパターン）
+- **コールドスタート**: マイクロLambdaより若干遅い（機能グループ分のコードをロード）
+
+**検討した他の選択肢:**
+- **マイクロLambda（1エンドポイント = 1関数）**: 15個、管理コストが高い
+- **モノリシックLambda（1関数）**: コールドスタート遅い、障害影響範囲大
 
 ### トレードオフ3: Aurora Serverless v2 vs RDS
 

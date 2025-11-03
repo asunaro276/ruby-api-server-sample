@@ -43,24 +43,25 @@ XのようなSNSアプリケーションのバックエンドAPI を、AWS Lambd
 - `comments`: コメント機能（新規追加）
 
 ### 影響を受けるコード
-- **Lambda 関数**: 各エンドポイントごとの Lambda 関数の作成
-  - lambda/auth/ (register, login, logout, me)
-  - lambda/posts/ (index, show, create, update, destroy)
-  - lambda/likes/ (index, create, destroy)
-  - lambda/comments/ (index, create, destroy)
-  - lambda/authorizers/ (jwt_authorizer)
+- **Lambda 関数**: 機能グループごとの Lambda 関数の作成（ハイブリッドアプローチ）
+  - lambda/auth/ (認証機能: register, login, logout, me)
+  - lambda/posts/ (投稿機能: index, show, create, update, destroy, upload_url)
+  - lambda/likes/ (いいね機能: index, create, destroy)
+  - lambda/comments/ (コメント機能: index, create, destroy)
+  - lambda/authorizers/jwt/ (JWT認証)
+  - **合計5個の Lambda 関数**（各関数内でルーティング実装）
 - **Lambda Layers**: 共通コード（モデル、ヘルパー、Gems）
 - **データベーススキーマ**: User, Post, Like, Comment テーブルの追加（PostgreSQL）
 - **インフラストラクチャ**:
   - terraform/ ディレクトリの追加、AWS リソースの定義
-  - lambda/ ディレクトリの追加、各Lambda関数の function.json 作成（lambroll）
+  - lambda/ ディレクトリの追加、各機能グループの function.json と handler.rb、controllers/ 作成（lambroll）
 - **設定ファイル**:
   - .gitignore（terraform関連、lambroll関連、環境変数）
   - 環境変数管理（AWS Secrets Manager / Parameter Store）
 
 ### 新しいAWSリソース
-- **Lambda 関数**: 約15個（エンドポイントごと）
-- **API Gateway**: REST API（dev, staging, prod ステージ）
+- **Lambda 関数**: **5個**（機能グループごと: auth, posts, likes, comments, jwt_authorizer）
+- **API Gateway**: REST API（dev, staging, prod ステージ、Proxy統合）
 - **Aurora Serverless v2**: PostgreSQL クラスター
 - **RDS Proxy**: データベース接続プール
 - **VPC**: プライベートサブネット、セキュリティグループ、NAT Gateway
@@ -73,6 +74,9 @@ XのようなSNSアプリケーションのバックエンドAPI を、AWS Lambd
 
 ### 技術的な決定事項
 - **アーキテクチャ**: AWS Lambda + API Gateway（サーバーレス）
+- **Lambda 関数の粒度**: ハイブリッドアプローチ（機能グループごとに分割、合計5個）
+  - マイクロLambda（15個）とモノリシックLambda（1個）の良いとこ取り
+  - 機能グループ内では API Gateway Proxy パターンでルーティング
 - **データベース**: Amazon Aurora Serverless v2 (PostgreSQL)
 - **認証方式**: JWT (JSON Web Token) + Lambda Authorizer
 - **API形式**: RESTful JSON API
